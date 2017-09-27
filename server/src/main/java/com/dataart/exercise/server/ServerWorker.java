@@ -1,7 +1,7 @@
 package com.dataart.exercise.server;
 
 import com.alibaba.fastjson.JSON;
-import com.dataart.exercise.dto.Message;
+import com.dataart.exercise.dto.MessageDto;
 import com.dataart.exercise.entity.Bird;
 import com.dataart.exercise.entity.Sighting;
 import com.dataart.exercise.request.SightingsRequest;
@@ -68,11 +68,11 @@ public class ServerWorker implements Callable<Boolean> {
              PrintWriter os = new PrintWriter(s.getOutputStream())) {
             isStoppingServer = false;
             String line = is.readLine();
-            Message request = JSON.parseObject(line, Message.class);
+            MessageDto request = JSON.parseObject(line, MessageDto.class);
             if (request == null) {
                 return false;
             }
-            Message response = handleMessage(request);
+            MessageDto response = handleMessage(request);
             os.println(JSON.toJSONString(response));
             os.flush();
             System.out.println("Response to Client  :  " + JSON.toJSONString(response));
@@ -94,35 +94,36 @@ public class ServerWorker implements Callable<Boolean> {
     /**
      * Handle a request from a client and prepare a response
      *
-     * @param message from the client
-     * @return Message response to the client
+     * @param messageDto from the client
+     * @return MessageDto response to the client
+     * @see com.dataart.exercise.dto.MessageDto
      */
-    private Message handleMessage(Message message) {
-        Object object = message.getObject();
-        switch (message.getAction()) {
+    private MessageDto handleMessage(MessageDto messageDto) {
+        Object object = messageDto.getObject();
+        switch (messageDto.getAction()) {
             case ADD_BIRD:
                 Bird bird = JSON.parseObject(object.toString(), Bird.class);
                 if (birds.containsKey(bird.getName())) {
-                    return new Message("FAILURE: Bird " + bird.getName() + " already exists");
+                    return new MessageDto("FAILURE: Bird " + bird.getName() + " already exists");
                 } else {
                     birds.put(bird.getName(), bird);
-                    return new Message("Bird " + bird.getName() + " successfully added to the database");
+                    return new MessageDto("Bird " + bird.getName() + " successfully added to the database");
                 }
             case ADD_SIGHTING:
                 Sighting sighting = JSON.parseObject(object.toString(), Sighting.class);
                 if (!birds.containsKey(sighting.getBirdName())) {
-                    return new Message("FAILURE: Sighting was not added because Bird " + sighting.getBirdName() + " does not exist");
+                    return new MessageDto("FAILURE: Sighting was not added because Bird " + sighting.getBirdName() + " does not exist");
                 }
                 List<Sighting> sightingList = sightings.getOrDefault(sighting.getBirdName(), new ArrayList());
                 if (sightingList.contains(sighting)) {
-                    return new Message("FAILURE: Sighting with such parameters already exists");
+                    return new MessageDto("FAILURE: Sighting with such parameters already exists");
                 } else {
                     sightingList.add(sighting);
                     sightings.putIfAbsent(sighting.getBirdName(), sightingList);
-                    return new Message("Sighting for " + sighting.getBirdName() + " successfully added to the database");
+                    return new MessageDto("Sighting for " + sighting.getBirdName() + " successfully added to the database");
                 }
             case LIST_BIRDS:
-                return new Message(message.getAction(), birds.values());
+                return new MessageDto(messageDto.getAction(), birds.values());
             case LIST_SIGHTING:
                 SightingsRequest sightingsRequest = JSON.parseObject(object.toString(), SightingsRequest.class);
                 try {
@@ -131,20 +132,20 @@ public class ServerWorker implements Callable<Boolean> {
                                     && s.getSightingDateTime().isAfter(LocalDateTime.of(sightingsRequest.getSightingDateStart(), LocalTime.MIN))
                                     && s.getSightingDateTime().isBefore(LocalDateTime.of(sightingsRequest.getSightingDateEnd(), LocalTime.MAX)))
                             .collect(Collectors.toList());
-                    return new Message(message.getAction(), sightingList);
+                    return new MessageDto(messageDto.getAction(), sightingList);
                 } catch (PatternSyntaxException e) {
-                    return new Message("Pattern error: " + e.getMessage());
+                    return new MessageDto("Pattern error: " + e.getMessage());
                 }
             case REMOVE:
                 if (!birds.containsKey(object)) {
-                    return new Message("FAILURE: Bird " + object + " does not exist");
+                    return new MessageDto("FAILURE: Bird " + object + " does not exist");
                 }
                 birds.remove(object);
                 sightings.remove(object);
-                return new Message("Bird " + object + " successfully removed from database");
+                return new MessageDto("Bird " + object + " successfully removed");
             case QUIT:
                 isStoppingServer = true;
         }
-        return new Message();
+        return new MessageDto();
     }
 }

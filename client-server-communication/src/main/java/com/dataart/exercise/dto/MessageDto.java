@@ -14,7 +14,7 @@ import lombok.Setter;
  */
 @NoArgsConstructor
 @AllArgsConstructor
-public class Message {
+public class MessageDto {
 
     @Getter
     @Setter
@@ -29,22 +29,22 @@ public class Message {
     String comment;
 
     /**
-     * Constructor for Message
+     * Constructor for MessageDto
      *
      * @param action current action
      * @param object transferred object
      */
-    public Message (Action action, Object object) {
+    public MessageDto(Action action, Object object) {
         this.action = action;
         this.object = object;
     }
 
     /**
-     * Constructor for Message
+     * Constructor for MessageDto
      *
      * @param comment comment from the server
      */
-    public Message (String comment) {
+    public MessageDto(String comment) {
         this.comment = comment;
     }
 }

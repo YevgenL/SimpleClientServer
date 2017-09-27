@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.dataart.exercise.dto.Message;
+import com.dataart.exercise.dto.MessageDto;
 import com.dataart.exercise.Action;
 import com.dataart.exercise.entity.Bird;
 import com.dataart.exercise.entity.Sighting;
@@ -71,14 +71,14 @@ public class SocketClient {
                 BufferedReader is = new BufferedReader(new InputStreamReader(s.getInputStream()));
                 PrintWriter os = new PrintWriter(s.getOutputStream())) {
 
-            Message request = prepareRequest(br);
+            MessageDto request = prepareRequest(br);
             if (request == null) {
                 return;
             }
             os.println(JSON.toJSONString(request));
             os.flush();
 
-            handleResponse(JSON.parseObject(is.readLine(), Message.class));
+            handleResponse(JSON.parseObject(is.readLine(), MessageDto.class));
         } catch (DateTimeParseException e) {
             System.err.println("ERROR: Date and/or time entered in a wrong format");
         } catch (IOException e){
@@ -129,11 +129,11 @@ public class SocketClient {
      * Prepare request to the server
      *
      * @param br
-     * @return Message that will be send to server
+     * @return MessageDto that will be send to server
      * @throws IOException if there is an issue when read from <b>br</b>
-     * @see com.dataart.exercise.dto.Message
+     * @see com.dataart.exercise.dto.MessageDto
      */
-    private Message prepareRequest(BufferedReader br) throws IOException {
+    private MessageDto prepareRequest(BufferedReader br) throws IOException {
         switch (actionFromParam(action)) {
             case ADD_BIRD:
                 System.out.println("You selected an option to add information about a bird.\n");
@@ -151,7 +151,7 @@ public class SocketClient {
                 bird.setWeight(br.readLine());
                 System.out.print("Please enter height of the bird and then press ENTER: ");
                 bird.setHeight(br.readLine());
-                return new Message(Action.ADD_BIRD, bird, null);
+                return new MessageDto(Action.ADD_BIRD, bird, null);
             case ADD_SIGHTING:
                 System.out.println("You selected an option to add information about a sighting.\n");
                 Sighting sighting = new Sighting();
@@ -167,28 +167,38 @@ public class SocketClient {
                 System.out.print("Please enter data and time in a format 'yyyy-MM-dd HH:mm' and then press ENTER: ");
                 String[] values = br.readLine().split(" ");
                 sighting.setSightingDateTime(LocalDateTime.parse(values[0] + " " + values[1], DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-                return new Message(Action.ADD_SIGHTING, sighting, null);
+                return new MessageDto(Action.ADD_SIGHTING, sighting, null);
             case LIST_BIRDS:
                 System.out.println("You selected an option to see a list of the birds.\n");
-                return new Message(Action.LIST_BIRDS, null);
+                return new MessageDto(Action.LIST_BIRDS, null);
             case LIST_SIGHTING:
                 System.out.println("You selected an option to see a list of the sightings.\n");
                 SightingsRequest sightingsRequest = new SightingsRequest();
-                System.out.print("Please enter name of the bird as a pattern and then press ENTER: ");
-                sightingsRequest.setBirdNamePattern(br.readLine());
+                System.out.print("Please enter name of the bird (regular expression pattern can be used) and then press ENTER: ");
+                value = br.readLine();
+                if (value.isEmpty()) {
+                    System.err.println("Name of a bird cannot be empty.");
+                    return null;
+                }
+                sightingsRequest.setBirdNamePattern(value);
                 System.out.print("Please enter start date of a period you are looking for the sights (please use format yyyy-MM-dd) and then press ENTER: ");
                 DateTimeFormatter pattern = DateTimeFormatter.ofPattern("yyyy-MM-dd");
                 sightingsRequest.setSightingDateStart(LocalDate.parse(br.readLine(), pattern));
                 System.out.print("Please enter end date of a period you are looking for the sights (please use format yyyy-MM-dd) and then press ENTER: ");
                 sightingsRequest.setSightingDateEnd(LocalDate.parse(br.readLine(), pattern));
-                return new Message(Action.LIST_SIGHTING, sightingsRequest);
+                return new MessageDto(Action.LIST_SIGHTING, sightingsRequest);
             case REMOVE:
                 System.out.println("You selected an option to remove information about a bird.\n");
                 System.out.print("Please enter name of the bird and then press ENTER: ");
-                return new Message(Action.REMOVE, br.readLine());
+                value = br.readLine();
+                if (value.isEmpty()) {
+                    System.err.println("Name of a bird cannot be empty.");
+                    return null;
+                }
+                return new MessageDto(Action.REMOVE, value);
             case QUIT:
                 System.out.println("You selected an option to shutdown the server.\n");
-                return new Message(Action.QUIT, null);
+                return new MessageDto(Action.QUIT, null);
         }
         return null;
     }
@@ -196,19 +206,19 @@ public class SocketClient {
     /**
      * Handle a response from the server
      *
-     * @param message response from the server
+     * @param messageDto response from the server
      */
-    private void handleResponse(Message message) {
+    private void handleResponse(MessageDto messageDto) {
         switch (actionFromParam(action)) {
             case ADD_BIRD:
             case ADD_SIGHTING:
             case REMOVE:
-                System.out.println("\n" + message.getComment());
+                System.out.println("\n" + messageDto.getComment());
                 break;
             case LIST_BIRDS:
                 System.out.println("A list of the birds:\n");
                 System.out.println("| NAME | COLOR | WEIGHT | HEIGHT |");
-                List<JSONObject> birdListJson = (List<JSONObject>) message.getObject();
+                List<JSONObject> birdListJson = (List<JSONObject>) messageDto.getObject();
                 List<Bird> birdList = birdListJson.stream()
                         .map(o -> JSON.parseObject(o.toString(), Bird.class))
                         .sorted(Comparator.comparing(Bird::getName))
@@ -217,12 +227,12 @@ public class SocketClient {
                 System.out.println("\nTOTAL: " + birdList.size());
                 break;
             case LIST_SIGHTING:
-                if (message.getObject() == null) {
-                    System.err.println(message.getComment());
+                if (messageDto.getObject() == null) {
+                    System.err.println(messageDto.getComment());
                 } else {
                     System.out.println("A list of the sightings:\n");
                     System.out.println("| BIRD NAME | DATE |");
-                    List<JSONObject> sightingListJson = (List<JSONObject>) message.getObject();
+                    List<JSONObject> sightingListJson = (List<JSONObject>) messageDto.getObject();
                     List<Sighting> sightingList = sightingListJson.stream()
                             .map(o -> JSON.parseObject(o.toString(), Sighting.class))
                             .sorted(Comparator.comparing(Sighting::getBirdName).thenComparing(Sighting::getSightingDateTime))
